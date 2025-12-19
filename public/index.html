@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RateRoute</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <div class="brand">
+        <div class="logo">RR</div>
+        <div>
+          <h1>RateRoute</h1>
+          <p class="sub">Best path to convert TWD into THB</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="themeBtn" class="btn" type="button" aria-label="Toggle theme">
+          <span class="btnIcon">☾</span>
+          <span id="themeText">Dark</span>
+        </button>
+
+        <button id="refreshBtn" class="btn" type="button">
+          <span class="btnIcon">↻</span>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container vertical">
+    <section class="panel">
+      <div class="panelRow">
+        <label class="field">
+          <span>Amount (TWD)</span>
+          <input id="amountInput" type="number" inputmode="decimal" min="0" step="1" value="10000" />
+        </label>    
+      </div>
+
+      <div class="statusRow" aria-live="polite">
+        <div id="loadingPill" class="pill hidden">Loading rates…</div>
+        <div id="errorPill" class="pill error hidden"></div>
+        <div id="updatedPill" class="pill subtle hidden"></div>
+      </div>
+    <div class="sourceRow" id="sourceRow">
+  <div class="sourceCard" id="srCard">
+    <div class="sourceTop">
+      <div class="sourceName">SuperRich</div>
+      <a class="sourceLink" href="https://www.superrichthailand.com/#!/en/exchange" target="_blank" rel="noopener">Open</a>
+    </div>
+    <div class="sourceMeta" id="srMeta">—</div>
+  </div>
+
+  <div class="sourceCard" id="ctCard">
+    <div class="sourceTop">
+      <div class="sourceName">Cathay</div>
+      <a class="sourceLink" href="https://www.cathaybk.com.tw/cathaybk/personal/product/deposit/currency-billboard/" target="_blank" rel="noopener">Open</a>
+    </div>
+    <div class="sourceMeta" id="ctMeta">—</div>
+  </div>
+</div>
+    </section>
+
+    <section class="summary">
+      <div class="summaryCard">
+        <div class="summaryTop">
+          <h3>Best route</h3>
+          <div class="chip" id="bestChip">—</div>
+        </div>
+        <p class="summaryText" id="bestText">Refresh to calculate.</p>
+      </div>
+    </section>
+
+    <section class="vlist" id="routesGrid"></section>
+
+    <footer class="footer">
+      <div class="muted small">
+        Cathay RATE uses EVA adjustment rules.
+      </div>
+    </footer>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
