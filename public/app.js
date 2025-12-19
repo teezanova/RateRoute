@@ -106,7 +106,6 @@
   }
 
   // Math
-  // THB = (TWD / CathaySell[X]) * SuperRichBuy[X]
   function thbViaCurrency(twdAmount, cathaySell, superRichBuy) {
     if (!twdAmount || twdAmount <= 0) return null;
     if (!cathaySell || cathaySell <= 0) return null;
@@ -114,7 +113,6 @@
     return (twdAmount / cathaySell) * superRichBuy;
   }
 
-  // Direct TWD -> THB using SuperRich TWD BUY (THB per 1 TWD)
   function thbDirect(twdAmount, superRichBuyTwd) {
     if (!twdAmount || twdAmount <= 0) return null;
     if (!superRichBuyTwd || superRichBuyTwd <= 0) return null;
@@ -150,10 +148,31 @@
     return card;
   }
 
+  // 🔒 STRICT PRIORITY (lower = higher priority)
+  const ROUTE_PRIORITY = {
+    DIRECT: 0,
+    USD: 1,
+    EUR: 2,
+    JPY: 3,
+  };
+
   function pickBestKey(items) {
-    const valid = items.filter((x) => x.thbOut != null && Number.isFinite(x.thbOut));
+    const valid = items.filter(
+      (x) => x.thbOut != null && Number.isFinite(x.thbOut)
+    );
     if (!valid.length) return null;
-    valid.sort((a, b) => b.thbOut - a.thbOut);
+
+    valid.sort((a, b) => {
+      // 1️⃣ Highest THB wins
+      if (b.thbOut !== a.thbOut) {
+        return b.thbOut - a.thbOut;
+      }
+      // 2️⃣ Tie → strict priority
+      return (
+        ROUTE_PRIORITY[a.key] - ROUTE_PRIORITY[b.key]
+      );
+    });
+
     return valid[0].key;
   }
 
@@ -194,7 +213,6 @@
     const sr = data.superRich || {};
     const ct = data.cathay || {};
 
-    // Source freshness (keep simple)
     const srFetchedAt = data.meta?.sources?.superRich?.fetchedAt ?? null;
     const ctFetchedAt = data.meta?.sources?.cathay?.fetchedAt ?? null;
 
@@ -203,46 +221,34 @@
     const ctAge = ctFetchedAt ? now - ctFetchedAt : null;
 
     const WARN_MS = 15 * 60 * 1000;
-    const srState = srAge == null ? "warn" : srAge > WARN_MS ? "warn" : "ok";
-    const ctState = ctAge == null ? "warn" : ctAge > WARN_MS ? "warn" : "ok";
-
-    setSourceCard(srCard, srMeta, srState, `Fetched ${ageLabel(srAge)}`);
-    setSourceCard(ctCard, ctMeta, ctState, `Fetched ${ageLabel(ctAge)}`);
+    setSourceCard(srCard, srMeta, srAge > WARN_MS ? "warn" : "ok", `Fetched ${ageLabel(srAge)}`);
+    setSourceCard(ctCard, ctMeta, ctAge > WARN_MS ? "warn" : "ok", `Fetched ${ageLabel(ctAge)}`);
 
     const computed = [];
 
     for (const ccy of ["USD", "EUR", "JPY"]) {
-      // FORCE adjusted only
-      const cathaySell =
-        (ct[ccy] && typeof ct[ccy].sellAdjusted === "number") ? ct[ccy].sellAdjusted : null;
-
+      const cathaySell = ct[ccy]?.sellAdjusted ?? null;
       const superRichBuy = sr[ccy]?.buy ?? null;
-      const thbOut = thbViaCurrency(twdAmount, cathaySell, superRichBuy);
-
       computed.push({
         key: ccy,
         title: `TWD → ${ccy} → THB`,
-        thbOut,
+        thbOut: thbViaCurrency(twdAmount, cathaySell, superRichBuy),
         details: [
           `TWD → ${ccy} = ${fmtRate(cathaySell, ccy === "JPY" ? 4 : 3)}`,
-          `${ccy} → THB = ${fmtRate(superRichBuy, ccy === "JPY" ? 4 : 2)}`,
-        ],
+          `${ccy} → THB = ${fmtRate(superRichBuy, ccy === "JPY" ? 4 : 2)}`
+        ]
       });
     }
-
-    const srTwdBuy = sr.TWD?.buy ?? null;
-    const thbOutDirect = thbDirect(twdAmount, srTwdBuy);
 
     computed.push({
       key: "DIRECT",
       title: "TWD → THB (Direct)",
-      thbOut: thbOutDirect,
-      details: [`TWD → THB = ${fmtRate(srTwdBuy, 4)}`],
+      thbOut: thbDirect(twdAmount, sr.TWD?.buy ?? null),
+      details: [`TWD → THB = ${fmtRate(sr.TWD?.buy, 4)}`]
     });
 
     const bestKey = pickBestKey(computed);
 
-    // Sort best -> worst (nulls last)
     computed.sort((a, b) => {
       const av = Number.isFinite(a.thbOut) ? a.thbOut : -Infinity;
       const bv = Number.isFinite(b.thbOut) ? b.thbOut : -Infinity;
@@ -251,29 +257,23 @@
 
     routesGrid.innerHTML = "";
     for (const item of computed) {
-      const isBest = item.key === bestKey;
       routesGrid.appendChild(
         buildCard({
           title: item.title,
-          badgeText: isBest ? "Best" : "Route",
-          isBest,
+          badgeText: item.key === bestKey ? "Best" : "Route",
+          isBest: item.key === bestKey,
           thbOut: item.thbOut,
           detailsLines: item.details,
         })
       );
     }
 
-    if (!bestKey) {
-      bestChip.textContent = "—";
-      bestText.textContent = "Not enough valid data to choose the best route.";
-    } else {
-      const bestItem = computed.find((x) => x.key === bestKey);
-      bestChip.textContent = bestKey === "DIRECT" ? "Direct" : bestKey;
-      bestText.textContent = `Best: ${bestItem.title} — ${fmtNumber(
-        bestItem.thbOut,
-        2
-      )} THB from ${fmtNumber(twdAmount, 0)} TWD.`;
-    }
+    bestChip.textContent = bestKey === "DIRECT" ? "Direct" : bestKey;
+    bestText.textContent = bestKey
+      ? `Best: ${bestKey} — ${fmtNumber(
+          computed.find(x => x.key === bestKey).thbOut, 2
+        )} THB`
+      : "Not enough valid data.";
 
     setUpdated(data.meta?.serverTimeText || new Date().toLocaleString());
   }
@@ -287,56 +287,39 @@
     let lastData = null;
 
     try {
-      // Attempt 1 (15s)
-      stopCountdown = startCountdown(15);
+      stopCountdown = startCountdown(60);
       let res = await fetch("/api/rates", { cache: "no-store" });
       lastData = await res.json();
       stopCountdown();
 
-      if (lastData?.ok === true) {
+      if (lastData?.ok) {
         renderRates(lastData);
         return;
       }
 
-      // Attempt 2 (30s)
-      stopCountdown = startCountdown(30);
+      await new Promise((r) => setTimeout(r, 1000));
+
+      stopCountdown = startCountdown(90);
       res = await fetch("/api/rates?refresh=1", { cache: "no-store" });
       lastData = await res.json();
       stopCountdown();
 
-      if (lastData?.ok === true) {
+      if (lastData?.ok) {
         renderRates(lastData);
         return;
       }
 
-      // Both attempts failed
-      setError("Rates are temporarily unavailable. Please try again later or tomorrow.");
-      setSourceCard(srCard, srMeta, "bad", "Unavailable");
-      setSourceCard(ctCard, ctMeta, "bad", "Unavailable");
+      throw new Error("Both attempts failed");
+    } catch (err) {
+      stopCountdown && stopCountdown();
+      setError("Rates are temporarily unavailable. Please try again later.");
       resetUI();
 
       if (lastData?.meta?.internetOk === true) {
         await notifyAdmin({
           type: "RATE_FETCH_FAILED",
-          app: "RateRoute",
           time: new Date().toISOString(),
-          errors: lastData?.adminErrors || lastData?.errors || ["Fetch failed"],
-        });
-      }
-    } catch (err) {
-      stopCountdown && stopCountdown();
-      setError("Unexpected error. Please try again later.", true);
-      setSourceCard(srCard, srMeta, "bad", "Unavailable");
-      setSourceCard(ctCard, ctMeta, "bad", "Unavailable");
-      resetUI();
-
-      // Only notify if we know internet is OK from lastData (if present)
-      if (lastData?.meta?.internetOk === true) {
-        await notifyAdmin({
-          type: "CLIENT_EXCEPTION",
-          app: "RateRoute",
-          time: new Date().toISOString(),
-          error: err?.message || String(err),
+          errors: lastData?.errors || []
         });
       }
     } finally {
@@ -344,27 +327,11 @@
     }
   }
 
-  // Events
   themeBtn.addEventListener("click", toggleTheme);
   refreshBtn.addEventListener("click", fetchAndRender);
+  amountInput.addEventListener("input", fetchAndRender);
 
-  let t = null;
-  amountInput.addEventListener("input", () => {
-    clearTimeout(t);
-    t = setTimeout(fetchAndRender, 250);
-  });
-
-  // Init theme
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved === "light" || saved === "dark") {
-    applyTheme(saved);
-  } else {
-    const prefersLight =
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: light)").matches;
-    applyTheme(prefersLight ? "light" : "dark");
-  }
-
+  applyTheme(localStorage.getItem(THEME_KEY) || "dark");
   resetUI();
   fetchAndRender();
 })();
