@@ -4,7 +4,8 @@
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "npx playwright install --with-deps chromium"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
