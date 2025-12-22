@@ -57,8 +57,10 @@
     return fmtNumber(x, decimals);
   }
 
+  // ✅ minimal change: show/hide loading pill (no countdown)
   function setLoading(isLoading) {
     refreshBtn.disabled = isLoading;
+
     if (isLoading) {
       loadingPill.classList.remove("hidden");
       loadingPill.classList.add("rrDots");
@@ -66,7 +68,7 @@
     } else {
       loadingPill.classList.add("hidden");
       loadingPill.classList.remove("rrDots");
-      loadingPill.textContent = "";
+      loadingPill.textContent = "Loading Rate...";
     }
   }
 
@@ -157,15 +159,26 @@
     return card;
   }
 
-  // 🔒 STRICT PRIORITY
-  const ROUTE_PRIORITY = { DIRECT: 0, USD: 1, EUR: 2, JPY: 3 };
+  // 🔒 STRICT PRIORITY (lower = higher priority)
+  const ROUTE_PRIORITY = {
+    DIRECT: 0,
+    USD: 1,
+    EUR: 2,
+    JPY: 3,
+  };
 
   function pickBestKey(items) {
-    const valid = items.filter(x => x.thbOut != null && Number.isFinite(x.thbOut));
+    const valid = items.filter(
+      (x) => x.thbOut != null && Number.isFinite(x.thbOut)
+    );
     if (!valid.length) return null;
 
     valid.sort((a, b) => {
-      if (b.thbOut !== a.thbOut) return b.thbOut - a.thbOut;
+      // 1️⃣ Highest THB wins
+      if (b.thbOut !== a.thbOut) {
+        return b.thbOut - a.thbOut;
+      }
+      // 2️⃣ Tie → strict priority
       return ROUTE_PRIORITY[a.key] - ROUTE_PRIORITY[b.key];
     });
 
@@ -260,23 +273,22 @@
     let lastData = null;
 
     try {
+      // ✅ Case 1 only: single attempt, no retry, no refresh=1
       let res = await fetch("/api/rates", { cache: "no-store" });
       lastData = await res.json();
 
-      if (!lastData?.ok) {
-        res = await fetch("/api/rates?refresh=1", { cache: "no-store" });
-        lastData = await res.json();
-      }
-
       if (lastData?.ok) {
         renderRates(lastData);
-      } else {
-        throw new Error("Fetch failed");
+        return;
       }
+
+      // ok:false -> popup, then stop and wait for user to press Refresh again
+      throw new Error("Fetch returned ok:false");
     } catch (err) {
       setError("Rates are temporarily unavailable. Please try again later.");
       resetUI();
 
+      // keep your original admin notify behavior
       if (lastData?.meta?.internetOk === true) {
         await notifyAdmin({
           type: "RATE_FETCH_FAILED",
@@ -291,9 +303,11 @@
 
   themeBtn.addEventListener("click", toggleTheme);
   refreshBtn.addEventListener("click", fetchAndRender);
-  amountInput.addEventListener("input", fetchAndRender);
+
+  // ✅ removed auto fetch on typing and on page load (wait for user click)
+  // amountInput.addEventListener("input", fetchAndRender);
 
   applyTheme(localStorage.getItem(THEME_KEY) || "dark");
   resetUI();
-  fetchAndRender();
+  // fetchAndRender();
 })();
