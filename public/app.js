@@ -62,14 +62,13 @@
     refreshBtn.disabled = isLoading;
 
     if (isLoading) {
-      loadingPill.classList.remove("hidden");
-      loadingPill.classList.add("rrDots");
-      loadingPill.textContent = "Loading rates";
-    } else {
-      loadingPill.classList.add("hidden");
-      loadingPill.classList.remove("rrDots");
-      loadingPill.textContent = "Loading Rate...";
-    }
+  loadingPill.textContent = "Loading";
+  loadingPill.classList.remove("hidden");
+  loadingPill.classList.add("rrDots");
+} else {
+  loadingPill.classList.remove("rrDots");
+  loadingPill.classList.add("hidden");
+}
   }
 
   function setError(msg, silent = false) {
@@ -309,5 +308,5 @@
 
   applyTheme(localStorage.getItem(THEME_KEY) || "dark");
   resetUI();
-  // fetchAndRender();
+  fetchAndRender();
 })();
