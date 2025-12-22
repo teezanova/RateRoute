@@ -59,6 +59,15 @@
 
   function setLoading(isLoading) {
     refreshBtn.disabled = isLoading;
+    if (isLoading) {
+      loadingPill.classList.remove("hidden");
+      loadingPill.classList.add("rrDots");
+      loadingPill.textContent = "Loading rates";
+    } else {
+      loadingPill.classList.add("hidden");
+      loadingPill.classList.remove("rrDots");
+      loadingPill.textContent = "";
+    }
   }
 
   function setError(msg, silent = false) {
@@ -148,54 +157,19 @@
     return card;
   }
 
-  // 🔒 STRICT PRIORITY (lower = higher priority)
-  const ROUTE_PRIORITY = {
-    DIRECT: 0,
-    USD: 1,
-    EUR: 2,
-    JPY: 3,
-  };
+  // 🔒 STRICT PRIORITY
+  const ROUTE_PRIORITY = { DIRECT: 0, USD: 1, EUR: 2, JPY: 3 };
 
   function pickBestKey(items) {
-    const valid = items.filter(
-      (x) => x.thbOut != null && Number.isFinite(x.thbOut)
-    );
+    const valid = items.filter(x => x.thbOut != null && Number.isFinite(x.thbOut));
     if (!valid.length) return null;
 
     valid.sort((a, b) => {
-      // 1️⃣ Highest THB wins
-      if (b.thbOut !== a.thbOut) {
-        return b.thbOut - a.thbOut;
-      }
-      // 2️⃣ Tie → strict priority
-      return (
-        ROUTE_PRIORITY[a.key] - ROUTE_PRIORITY[b.key]
-      );
+      if (b.thbOut !== a.thbOut) return b.thbOut - a.thbOut;
+      return ROUTE_PRIORITY[a.key] - ROUTE_PRIORITY[b.key];
     });
 
     return valid[0].key;
-  }
-
-  function startCountdown(seconds) {
-    loadingPill.classList.remove("hidden");
-    loadingPill.classList.add("rrDots");
-
-    let remaining = seconds;
-    loadingPill.textContent = `Loading rates (${remaining}s)`;
-
-    const iv = setInterval(() => {
-      remaining--;
-      if (remaining >= 0) {
-        loadingPill.textContent = `Loading rates (${remaining}s)`;
-      }
-    }, 1000);
-
-    return () => {
-      clearInterval(iv);
-      loadingPill.classList.add("hidden");
-      loadingPill.classList.remove("rrDots");
-      loadingPill.textContent = "Loading Rate...";
-    };
   }
 
   async function notifyAdmin(payload) {
@@ -283,35 +257,23 @@
     setUpdated("");
     setLoading(true);
 
-    let stopCountdown = null;
     let lastData = null;
 
     try {
-      stopCountdown = startCountdown(60);
       let res = await fetch("/api/rates", { cache: "no-store" });
       lastData = await res.json();
-      stopCountdown();
+
+      if (!lastData?.ok) {
+        res = await fetch("/api/rates?refresh=1", { cache: "no-store" });
+        lastData = await res.json();
+      }
 
       if (lastData?.ok) {
         renderRates(lastData);
-        return;
+      } else {
+        throw new Error("Fetch failed");
       }
-
-      await new Promise((r) => setTimeout(r, 1000));
-
-      stopCountdown = startCountdown(90);
-      res = await fetch("/api/rates?refresh=1", { cache: "no-store" });
-      lastData = await res.json();
-      stopCountdown();
-
-      if (lastData?.ok) {
-        renderRates(lastData);
-        return;
-      }
-
-      throw new Error("Both attempts failed");
     } catch (err) {
-      stopCountdown && stopCountdown();
       setError("Rates are temporarily unavailable. Please try again later.");
       resetUI();
 
