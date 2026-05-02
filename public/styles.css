@@ -389,6 +389,38 @@ h3{ margin:0; font-size:13px; color: var(--muted); letter-spacing:.25px; }
 }
 .sourceLink:hover{ opacity:.85; }
 
+/* Dim existing content while a fresh fetch is in-flight */
+.fetching {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity .15s;
+}
+
+/* Single-column KPI grid (DIRECT route has no intermediate currency) */
+.kpis.single {
+  grid-template-columns: 1fr;
+}
+
+/* Secondary KPI value — intermediate currency step */
+.kValueSm {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* Delta line shown below KPIs on non-best cards */
+.kpiDelta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Best badge — green tint to match the card highlight */
+.badge.badgeBest {
+  background: color-mix(in srgb, var(--good) 18%, transparent);
+  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+  color: color-mix(in srgb, var(--good) 70%, var(--text));
+}
+
 /* Make loading pill more eye-catching */
 #loadingPill {
   font-weight: 700;

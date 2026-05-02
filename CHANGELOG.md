@@ -2,6 +2,22 @@
 
 All notable changes to RateRoute will be documented in this file.
 
+## v1.03 — 2026-05-02
+
+### UX/UI improvements
+
+- **Instant recalculation**: Changing the TWD amount now recalculates all routes immediately without a network fetch. Rates are fetched once and reused locally.
+- **No more alert popups**: Error messages now appear only in the inline error pill — no blocking `alert()` dialog.
+- **Stale-data loading**: While a refresh is in progress, existing route cards stay visible but dimmed instead of being wiped to blank.
+- **Theme button label**: Button now shows the action ("Light" / "Dark") rather than the current state, matching standard UX convention.
+- **Intermediate currency amount**: Each currency route card now shows a second KPI — the amount of USD / EUR / JPY the TWD converts to before reaching THB (e.g., "Amount in USD: 312.45 USD").
+- **Delta vs best**: Non-best route cards show how much less THB they yield (e.g., "−45.20 THB vs best").
+- **Rank badges**: Route cards show `#2`, `#3`, `#4` instead of the generic "Route" label; the winner shows "Best" with a green tint.
+- **Enter key**: Pressing Enter inside the amount field triggers a fresh rate fetch.
+- **Live source age**: Source card timestamps ("Fetched 3m ago") refresh every 30 s so they stay accurate after the page loads.
+- **Favicon**: Added SVG favicon matching the app logo.
+- **Footer**: Clarified Cathay rate adjustment note to "Cathay sell rates adjusted for EVA Air cardholder discount."
+
 ## v1.02 — 2026-05-02
 
 ### Infrastructure: Cloudflare Tunnel + URL Update

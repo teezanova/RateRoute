@@ -3,38 +3,39 @@
 
   const amountInput = el("amountInput");
   const refreshBtn = el("refreshBtn");
-
   const themeBtn = el("themeBtn");
   const themeText = el("themeText");
-
   const loadingPill = el("loadingPill");
   const errorPill = el("errorPill");
   const updatedPill = el("updatedPill");
-
   const bestChip = el("bestChip");
   const bestText = el("bestText");
-
   const routesGrid = el("routesGrid");
-
-  // Source status cards
   const srCard = el("srCard");
   const ctCard = el("ctCard");
   const srMeta = el("srMeta");
   const ctMeta = el("ctMeta");
+  const summarySection = document.querySelector(".summary");
 
-  // Theme
   const THEME_KEY = "rateroute_theme";
+
+  // Persisted across fetches so amount changes recalculate instantly
+  let lastData = null;
+  let _srFetchedAt = null;
+  let _ctFetchedAt = null;
+
+  // ── Theme ────────────────────────────────────────────────────────────────
 
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
+    const icon = themeBtn.querySelector(".btnIcon");
+    // Label shows the action (what you'll switch TO), not the current state
     if (theme === "light") {
-      themeText.textContent = "Light";
-      const icon = themeBtn.querySelector(".btnIcon");
-      if (icon) icon.textContent = "☀";
-    } else {
       themeText.textContent = "Dark";
-      const icon = themeBtn.querySelector(".btnIcon");
       if (icon) icon.textContent = "☾";
+    } else {
+      themeText.textContent = "Light";
+      if (icon) icon.textContent = "☀";
     }
     localStorage.setItem(THEME_KEY, theme);
   }
@@ -43,6 +44,8 @@
     const cur = document.documentElement.getAttribute("data-theme") || "dark";
     applyTheme(cur === "dark" ? "light" : "dark");
   }
+
+  // ── Formatters ───────────────────────────────────────────────────────────
 
   function fmtNumber(x, decimals = 2) {
     if (x === null || x === undefined || Number.isNaN(x)) return "—";
@@ -57,21 +60,21 @@
     return fmtNumber(x, decimals);
   }
 
-  // ✅ minimal change: show/hide loading pill (no countdown)
+  // ── UI state ─────────────────────────────────────────────────────────────
+
   function setLoading(isLoading) {
     refreshBtn.disabled = isLoading;
-
     if (isLoading) {
-  loadingPill.textContent = "Loading";
-  loadingPill.classList.remove("hidden");
-  loadingPill.classList.add("rrDots");
-} else {
-  loadingPill.classList.remove("rrDots");
-  loadingPill.classList.add("hidden");
-}
+      loadingPill.textContent = "Loading";
+      loadingPill.classList.remove("hidden");
+      loadingPill.classList.add("rrDots");
+    } else {
+      loadingPill.classList.remove("rrDots");
+      loadingPill.classList.add("hidden");
+    }
   }
 
-  function setError(msg, silent = false) {
+  function setError(msg) {
     if (!msg) {
       errorPill.classList.add("hidden");
       errorPill.textContent = "";
@@ -79,7 +82,7 @@
     }
     errorPill.textContent = msg;
     errorPill.classList.remove("hidden");
-    if (!silent) alert(msg);
+    // No alert() — inline pill only
   }
 
   function setUpdated(tsText) {
@@ -92,11 +95,21 @@
     updatedPill.classList.remove("hidden");
   }
 
+  // Dim existing results while fetching instead of wiping them
+  function setFetching(on) {
+    [routesGrid, summarySection].forEach((node) => {
+      if (on) node.classList.add("fetching");
+      else node.classList.remove("fetching");
+    });
+  }
+
   function resetUI() {
     routesGrid.innerHTML = "";
     bestChip.textContent = "—";
     bestText.textContent = "Refresh to calculate.";
   }
+
+  // ── Source card ages ─────────────────────────────────────────────────────
 
   function ageLabel(ms) {
     if (ms == null) return "unknown";
@@ -115,7 +128,25 @@
     metaEl.textContent = text;
   }
 
-  // Math
+  function refreshSourceAges() {
+    if (_srFetchedAt == null && _ctFetchedAt == null) return;
+    const now = Date.now();
+    const WARN_MS = 15 * 60 * 1000;
+    if (_srFetchedAt != null) {
+      const age = now - _srFetchedAt;
+      setSourceCard(srCard, srMeta, age > WARN_MS ? "warn" : "ok", `Fetched ${ageLabel(age)}`);
+    }
+    if (_ctFetchedAt != null) {
+      const age = now - _ctFetchedAt;
+      setSourceCard(ctCard, ctMeta, age > WARN_MS ? "warn" : "ok", `Fetched ${ageLabel(age)}`);
+    }
+  }
+
+  // Re-render source ages every 30s so "3m ago" stays accurate
+  setInterval(refreshSourceAges, 30_000);
+
+  // ── Math ─────────────────────────────────────────────────────────────────
+
   function thbViaCurrency(twdAmount, cathaySell, superRichBuy) {
     if (!twdAmount || twdAmount <= 0) return null;
     if (!cathaySell || cathaySell <= 0) return null;
@@ -129,24 +160,46 @@
     return twdAmount * superRichBuyTwd;
   }
 
-  function buildCard({ title, badgeText, isBest, thbOut, detailsLines }) {
+  function calcForeignAmount(twdAmount, cathaySell) {
+    if (!twdAmount || twdAmount <= 0) return null;
+    if (!cathaySell || cathaySell <= 0) return null;
+    return twdAmount / cathaySell;
+  }
+
+  // ── Card builder ─────────────────────────────────────────────────────────
+
+  function buildCard({ title, rank, isBest, thbOut, delta, foreignAmt, foreignLabel, detailsLines }) {
     const card = document.createElement("article");
     card.className = "card" + (isBest ? " best" : "");
 
+    const badgeText = isBest ? "Best" : `#${rank}`;
+    const hasForeign = foreignAmt != null && foreignLabel;
+
+    const foreignKpiHtml = hasForeign ? `
+      <div class="kpi">
+        <div class="kLabel">Amount in ${foreignLabel}</div>
+        <div class="kValue kValueSm">${fmtNumber(foreignAmt, foreignLabel === "JPY" ? 0 : 2)} ${foreignLabel}</div>
+      </div>` : "";
+
+    const deltaHtml = (!isBest && delta != null && Number.isFinite(delta))
+      ? `<div class="kpiDelta">${fmtNumber(delta, 2)} THB vs best</div>`
+      : "";
+
     card.innerHTML = `
       <div class="cardHead">
-        <div>
-          <h2 class="cardTitle">${title}</h2>
-        </div>
-        <div class="badge">${badgeText}</div>
+        <h2 class="cardTitle">${title}</h2>
+        <div class="badge${isBest ? " badgeBest" : ""}">${badgeText}</div>
       </div>
 
-      <div class="kpis single">
+      <div class="kpis${hasForeign ? "" : " single"}">
+        ${foreignKpiHtml}
         <div class="kpi">
           <div class="kLabel">You receive</div>
           <div class="kValue">${thbOut == null ? "—" : `${fmtNumber(thbOut, 2)} THB`}</div>
         </div>
       </div>
+
+      ${deltaHtml}
 
       <details class="details">
         <summary class="detailsSummary">Details</summary>
@@ -158,31 +211,21 @@
     return card;
   }
 
-  // 🔒 STRICT PRIORITY (lower = higher priority)
-  const ROUTE_PRIORITY = {
-    DIRECT: 0,
-    USD: 1,
-    EUR: 2,
-    JPY: 3,
-  };
+  // ── Route logic ──────────────────────────────────────────────────────────
+
+  const ROUTE_PRIORITY = { DIRECT: 0, USD: 1, EUR: 2, JPY: 3 };
 
   function pickBestKey(items) {
-    const valid = items.filter(
-      (x) => x.thbOut != null && Number.isFinite(x.thbOut)
-    );
+    const valid = items.filter((x) => x.thbOut != null && Number.isFinite(x.thbOut));
     if (!valid.length) return null;
-
     valid.sort((a, b) => {
-      // 1️⃣ Highest THB wins
-      if (b.thbOut !== a.thbOut) {
-        return b.thbOut - a.thbOut;
-      }
-      // 2️⃣ Tie → strict priority
+      if (b.thbOut !== a.thbOut) return b.thbOut - a.thbOut;
       return ROUTE_PRIORITY[a.key] - ROUTE_PRIORITY[b.key];
     });
-
     return valid[0].key;
   }
+
+  // ── Admin notify ─────────────────────────────────────────────────────────
 
   async function notifyAdmin(payload) {
     try {
@@ -194,21 +237,16 @@
     } catch (_) {}
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
   function renderRates(data) {
     const twdAmount = Number(amountInput.value || 0);
     const sr = data.superRich || {};
     const ct = data.cathay || {};
 
-    const srFetchedAt = data.meta?.sources?.superRich?.fetchedAt ?? null;
-    const ctFetchedAt = data.meta?.sources?.cathay?.fetchedAt ?? null;
-
-    const now = Date.now();
-    const srAge = srFetchedAt ? now - srFetchedAt : null;
-    const ctAge = ctFetchedAt ? now - ctFetchedAt : null;
-
-    const WARN_MS = 15 * 60 * 1000;
-    setSourceCard(srCard, srMeta, srAge > WARN_MS ? "warn" : "ok", `Fetched ${ageLabel(srAge)}`);
-    setSourceCard(ctCard, ctMeta, ctAge > WARN_MS ? "warn" : "ok", `Fetched ${ageLabel(ctAge)}`);
+    _srFetchedAt = data.meta?.sources?.superRich?.fetchedAt ?? null;
+    _ctFetchedAt = data.meta?.sources?.cathay?.fetchedAt ?? null;
+    refreshSourceAges();
 
     const computed = [];
 
@@ -219,10 +257,12 @@
         key: ccy,
         title: `TWD → ${ccy} → THB`,
         thbOut: thbViaCurrency(twdAmount, cathaySell, superRichBuy),
+        foreignAmt: calcForeignAmount(twdAmount, cathaySell),
+        foreignLabel: ccy,
         details: [
           `TWD → ${ccy} = ${fmtRate(cathaySell, ccy === "JPY" ? 4 : 3)}`,
-          `${ccy} → THB = ${fmtRate(superRichBuy, ccy === "JPY" ? 4 : 2)}`
-        ]
+          `${ccy} → THB = ${fmtRate(superRichBuy, ccy === "JPY" ? 4 : 2)}`,
+        ],
       });
     }
 
@@ -230,10 +270,13 @@
       key: "DIRECT",
       title: "TWD → THB (Direct)",
       thbOut: thbDirect(twdAmount, sr.TWD?.buy ?? null),
-      details: [`TWD → THB = ${fmtRate(sr.TWD?.buy, 4)}`]
+      foreignAmt: null,
+      foreignLabel: null,
+      details: [`TWD → THB = ${fmtRate(sr.TWD?.buy, 4)}`],
     });
 
     const bestKey = pickBestKey(computed);
+    const bestThb = computed.find((x) => x.key === bestKey)?.thbOut ?? null;
 
     computed.sort((a, b) => {
       const av = Number.isFinite(a.thbOut) ? a.thbOut : -Infinity;
@@ -242,57 +285,73 @@
     });
 
     routesGrid.innerHTML = "";
-    for (const item of computed) {
+    computed.forEach((item, i) => {
+      const delta =
+        item.key === bestKey || item.thbOut == null || bestThb == null
+          ? null
+          : item.thbOut - bestThb;
+
       routesGrid.appendChild(
         buildCard({
           title: item.title,
-          badgeText: item.key === bestKey ? "Best" : "Route",
+          rank: i + 1,
           isBest: item.key === bestKey,
           thbOut: item.thbOut,
+          delta,
+          foreignAmt: item.foreignAmt,
+          foreignLabel: item.foreignLabel,
           detailsLines: item.details,
         })
       );
-    }
+    });
 
-    bestChip.textContent = bestKey === "DIRECT" ? "Direct" : bestKey;
+    bestChip.textContent = bestKey === "DIRECT" ? "Direct" : (bestKey ?? "—");
     bestText.textContent = bestKey
-      ? `Best: ${bestKey} — ${fmtNumber(
-          computed.find(x => x.key === bestKey).thbOut, 2
+      ? `Best: ${bestKey === "DIRECT" ? "Direct" : bestKey} — ${fmtNumber(
+          computed.find((x) => x.key === bestKey).thbOut,
+          2
         )} THB`
       : "Not enough valid data.";
 
     setUpdated(data.meta?.serverTimeText || new Date().toLocaleString());
   }
 
+  // ── Fetch ────────────────────────────────────────────────────────────────
+
   async function fetchAndRender() {
     setError("");
-    setUpdated("");
     setLoading(true);
 
-    let lastData = null;
+    const hasExistingData = lastData !== null;
+    if (hasExistingData) {
+      // Dim existing results rather than wiping them
+      setFetching(true);
+    }
+
+    let fetchedData = null;
 
     try {
-      // ✅ Case 1 only: single attempt, no retry, no refresh=1
-      let res = await fetch("/api/rates", { cache: "no-store" });
-      lastData = await res.json();
+      const res = await fetch("/api/rates", { cache: "no-store" });
+      fetchedData = await res.json();
 
-      if (lastData?.ok) {
+      if (fetchedData?.ok) {
+        lastData = fetchedData;
+        setFetching(false);
         renderRates(lastData);
         return;
       }
 
-      // ok:false -> popup, then stop and wait for user to press Refresh again
       throw new Error("Fetch returned ok:false");
     } catch (err) {
+      setFetching(false);
       setError("Rates are temporarily unavailable. Please try again later.");
-      resetUI();
+      if (!hasExistingData) resetUI();
 
-      // keep your original admin notify behavior
-      if (lastData?.meta?.internetOk === true) {
+      if (fetchedData?.meta?.internetOk === true) {
         await notifyAdmin({
           type: "RATE_FETCH_FAILED",
           time: new Date().toISOString(),
-          errors: lastData?.errors || []
+          errors: fetchedData?.errors || [],
         });
       }
     } finally {
@@ -300,11 +359,20 @@
     }
   }
 
+  // ── Events ───────────────────────────────────────────────────────────────
+
   themeBtn.addEventListener("click", toggleTheme);
   refreshBtn.addEventListener("click", fetchAndRender);
 
-  // ✅ removed auto fetch on typing and on page load (wait for user click)
-  // amountInput.addEventListener("input", fetchAndRender);
+  // Recalculate instantly on amount change — no network needed
+  amountInput.addEventListener("input", () => {
+    if (lastData) renderRates(lastData);
+  });
+
+  // Enter in the amount field triggers a fresh fetch
+  amountInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") fetchAndRender();
+  });
 
   applyTheme(localStorage.getItem(THEME_KEY) || "dark");
   resetUI();
