@@ -3,7 +3,7 @@
   --shadow: 0 14px 34px rgba(0,0,0,.20);
 }
 
-/* Dark */
+/* Dark — variables only */
 html[data-theme="dark"]{
   --bg:#070a10;
   --panel:rgba(255,255,255,.03);
@@ -11,37 +11,49 @@ html[data-theme="dark"]{
   --text:#eaf1fb;
   --muted:#98aac3;
   --line:rgba(255,255,255,.10);
-
   --good:#2ee59d;
   --chip:#162438;
   --btnbg:rgba(255,255,255,.04);
   --btnbdr:rgba(255,255,255,.12);
-
-  background:
-    radial-gradient(1100px 650px at 12% 0%, rgba(46,229,157,.11), transparent 60%),
-    radial-gradient(1000px 520px at 88% 10%, rgba(115,138,255,.12), transparent 55%),
-    radial-gradient(800px 520px at 60% 120%, rgba(255,211,106,.08), transparent 60%),
-    var(--bg);
 }
 
-/* Light */
+/* 6-orb fixed background covers the full page at every scroll depth */
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse 1400px 800px at  -5%  -5%, rgba( 46,229,157,.15) 0%, transparent 60%),
+    radial-gradient(ellipse 1200px 700px at 105%  -5%, rgba(115,138,255,.17) 0%, transparent 58%),
+    radial-gradient(ellipse  800px 600px at  50%  42%, rgba(255,195, 80,.06) 0%, transparent 55%),
+    radial-gradient(ellipse  950px 700px at  -5%  90%, rgba( 56,130,246,.11) 0%, transparent 58%),
+    radial-gradient(ellipse 1050px 700px at 105%  88%, rgba( 46,229,157,.08) 0%, transparent 55%),
+    radial-gradient(ellipse 1300px 700px at  50% 108%, rgba(115,138,255,.13) 0%, transparent 60%),
+    #070a10;
+  background-attachment: fixed;
+}
+
+/* Light — variables only */
 html[data-theme="light"]{
-  --bg:#f7f9fc;
-  --panel:rgba(0,0,0,.03);
-  --card:rgba(255,255,255,.75);
+  --bg:#f4f7fb;
+  --panel:rgba(255,255,255,.70);
+  --card:rgba(255,255,255,.80);
   --text:#0c1320;
   --muted:#50627b;
-  --line:rgba(0,0,0,.10);
-
+  --line:rgba(0,0,0,.08);
   --good:#10b981;
   --chip:rgba(16,185,129,.10);
-  --btnbg:rgba(255,255,255,.70);
+  --btnbg:rgba(255,255,255,.80);
   --btnbdr:rgba(0,0,0,.10);
+}
 
+html[data-theme="light"] body {
   background:
-    radial-gradient(900px 520px at 12% 0%, rgba(16,185,129,.10), transparent 60%),
-    radial-gradient(800px 480px at 88% 10%, rgba(59,130,246,.10), transparent 55%),
-    var(--bg);
+    radial-gradient(ellipse 1200px 700px at  -5%  -5%, rgba( 16,185,129,.14) 0%, transparent 60%),
+    radial-gradient(ellipse 1000px 650px at 105%  -5%, rgba( 59,130,246,.14) 0%, transparent 58%),
+    radial-gradient(ellipse  700px 500px at  52%  42%, rgba(139, 92,246,.07) 0%, transparent 55%),
+    radial-gradient(ellipse  850px 620px at  -5%  90%, rgba( 59,130,246,.10) 0%, transparent 58%),
+    radial-gradient(ellipse  950px 650px at 105%  88%, rgba( 16,185,129,.09) 0%, transparent 55%),
+    radial-gradient(ellipse 1150px 660px at  50% 108%, rgba( 99,102,241,.10) 0%, transparent 60%),
+    #f4f7fb;
+  background-attachment: fixed;
 }
 
 *{box-sizing:border-box}
@@ -50,7 +62,6 @@ body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   color:var(--text);
-  background: inherit;
 }
 
 .container{
@@ -109,6 +120,7 @@ h1{ font-size:18px; margin:0; line-height:1.1; }
   color: var(--text);
   cursor:pointer;
   user-select:none;
+  touch-action:manipulation;
   transition: transform .05s ease, background .2s ease, border-color .2s ease;
 }
 .btn:hover{ border-color: color-mix(in srgb, var(--text) 20%, transparent); }
@@ -152,6 +164,8 @@ input{
   background: color-mix(in srgb, var(--bg) 70%, transparent);
   color: var(--text);
   outline:none;
+  font-size:16px;         /* prevents iOS Safari auto-zoom on focus */
+  touch-action:manipulation;
 }
 input:focus{
   border-color: color-mix(in srgb, var(--good) 55%, transparent);
