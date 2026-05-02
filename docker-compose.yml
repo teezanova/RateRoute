@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    container_name: rateroute
+    env_file:
+      - .env
+    networks:
+      - proxy
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    network_mode: "service:app"
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiMTllZjVhYjdlYzlhZmQ0MDBlNjliZmMzOTE1Mjg0NmMiLCJ0IjoiMTUyZjM4ZTgtZDlhNC00NGY5LWE2MjctZDlmMTk4M2I1NDgzIiwicyI6Ik56TTNZalV6WkdFdE16aGtaQzAwTm1ZNExUZ3hOamt0Wmpka1pqazRNRGxtTnpZNSJ9
+    depends_on:
+      - app
+
+networks:
+  proxy:
+    external: true
