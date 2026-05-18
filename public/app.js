@@ -7,6 +7,7 @@
   const themeText = el("themeText");
   const loadingPill = el("loadingPill");
   const errorPill = el("errorPill");
+  const stalePill = el("stalePill");
   const updatedPill = el("updatedPill");
   const bestChip = el("bestChip");
   const bestText = el("bestText");
@@ -28,15 +29,8 @@
 
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
-    const icon = themeBtn.querySelector(".btnIcon");
-    // Label shows the action (what you'll switch TO), not the current state
-    if (theme === "light") {
-      themeText.textContent = "Dark";
-      if (icon) icon.textContent = "☾";
-    } else {
-      themeText.textContent = "Light";
-      if (icon) icon.textContent = "☀";
-    }
+    // Label shows the action the click will take (icon swap is handled in CSS by data-theme)
+    themeText.textContent = theme === "light" ? "Dark" : "Light";
     localStorage.setItem(THEME_KEY, theme);
   }
 
@@ -78,11 +72,22 @@
     if (!msg) {
       errorPill.classList.add("hidden");
       errorPill.textContent = "";
+      errorPill.removeAttribute("role");
       return;
     }
     errorPill.textContent = msg;
     errorPill.classList.remove("hidden");
-    // No alert() — inline pill only
+    errorPill.setAttribute("role", "alert");
+  }
+
+  function setStale(msg) {
+    if (!msg) {
+      stalePill.classList.add("hidden");
+      stalePill.textContent = "";
+      return;
+    }
+    stalePill.textContent = msg;
+    stalePill.classList.remove("hidden");
   }
 
   function setUpdated(tsText) {
@@ -106,7 +111,7 @@
   function resetUI() {
     routesGrid.innerHTML = "";
     bestChip.textContent = "—";
-    bestText.textContent = "Refresh to calculate.";
+    bestText.textContent = "Enter an amount to compare routes.";
   }
 
   // ── Source card ages ─────────────────────────────────────────────────────
@@ -306,12 +311,22 @@
     });
 
     bestChip.textContent = bestKey === "DIRECT" ? "Direct" : (bestKey ?? "—");
-    bestText.textContent = bestKey
-      ? `Best: ${bestKey === "DIRECT" ? "Direct" : bestKey} — ${fmtNumber(
-          computed.find((x) => x.key === bestKey).thbOut,
-          2
-        )} THB`
-      : "Not enough valid data.";
+    if (!twdAmount || twdAmount <= 0) {
+      bestText.textContent = "Enter an amount to compare routes.";
+    } else if (bestKey) {
+      bestText.textContent = `Best: ${bestKey === "DIRECT" ? "Direct" : bestKey} — ${fmtNumber(
+        computed.find((x) => x.key === bestKey).thbOut,
+        2
+      )} THB`;
+    } else {
+      bestText.textContent = "Not enough valid data.";
+    }
+
+    if (data.meta?.stale && data.meta?.cachedAtText) {
+      setStale(`Showing cached rates from ${data.meta.cachedAtText}`);
+    } else {
+      setStale(null);
+    }
 
     setUpdated(data.meta?.serverTimeText || new Date().toLocaleString());
   }
