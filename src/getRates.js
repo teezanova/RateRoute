@@ -40,16 +40,27 @@ function redactErrorsForUser(adminErrors) {
   return ["Unable to fetch rates right now. Please try again."];
 }
 
+function withMeta(payload, extra) {
+  return {
+    ...payload,
+    meta: { ...(payload.meta || {}), ...extra },
+  };
+}
+
 async function getRates({ force = false } = {}) {
-  if (!force) {
-    const cached = getCache();
-    if (cached) {
-      cached.meta = cached.meta || {};
-      cached.meta.cached = true;
-      return cached;
-    }
+  const cached = getCache(); // may be null, fresh, or stale
+
+  if (!force && cached?.fresh) {
+    return withMeta(cached.payload, {
+      cached: true,
+      stale: false,
+      cachedAt: cached.cachedAt,
+      cachedAtText: new Date(cached.cachedAt).toLocaleString(),
+      ageMs: cached.ageMs,
+    });
   }
-const internetOk = await internetLooksUp();
+
+  const internetOk = await internetLooksUp();
 
   const adminErrors = [];
   let sr = null;
@@ -108,6 +119,7 @@ const internetOk = await internetLooksUp();
     meta: {
       internetOk,
       cached: false,
+      stale: false,
       cacheTtlMs: TTL_MS,
       serverTimestamp: Date.now(),
       serverTimeText: nowText(),
@@ -126,7 +138,26 @@ const internetOk = await internetLooksUp();
     },
   };
 
-  setCache(payload);
+  if (payload.ok) {
+    setCache(payload);
+    return withMeta(payload, { cachedAt: Date.now() });
+  }
+
+  // Fresh fetch failed. Fall back to the last cached snapshot if we have one,
+  // so the server always returns the latest known rates with a timestamp.
+  if (cached) {
+    return withMeta(cached.payload, {
+      cached: true,
+      stale: true,
+      cachedAt: cached.cachedAt,
+      cachedAtText: new Date(cached.cachedAt).toLocaleString(),
+      ageMs: Date.now() - cached.cachedAt,
+      internetOk,
+      // Surface what just failed for ops/debug — never shown to users.
+      lastFetchErrors: adminErrors,
+    });
+  }
+
   return payload;
 }
 
